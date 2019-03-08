@@ -27,6 +27,7 @@ import (
 	"github.com/golang/glog"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -359,6 +360,13 @@ func (s *ServiceController) persistUpdate(service *v1.Service) error {
 
 func (s *ServiceController) ensureLoadBalancer(service *v1.Service) (*v1.LoadBalancerStatus, error) {
 	nodes, err := s.nodeLister.ListWithPredicate(getNodeConditionPredicate())
+	if err != nil {
+		return nil, err
+	}
+
+	labelset := labels.Set{}
+	labelset["cloudProvider"] = "tencent"
+	nodes, err = s.nodeLister.List(labels.SelectorFromSet(labelset))
 	if err != nil {
 		return nil, err
 	}
