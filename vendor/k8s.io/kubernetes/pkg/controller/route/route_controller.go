@@ -126,10 +126,18 @@ func (rc *RouteController) reconcileNodeRoutes() error {
 	if err != nil {
 		return fmt.Errorf("error listing routes: %v", err)
 	}
+	labelset := labels.Set{}
+	labelset["cloudProvider"] = "tencent"
+	nodes, err = s.nodeLister.List(labels.SelectorFromSet(labelset))
+	if err != nil {
+		return nil, err
+	}
+	/*
 	nodes, err := rc.nodeLister.List(labels.Everything())
 	if err != nil {
 		return fmt.Errorf("error listing nodes: %v", err)
 	}
+	*/
 	return rc.reconcile(nodes, routeList)
 }
 
