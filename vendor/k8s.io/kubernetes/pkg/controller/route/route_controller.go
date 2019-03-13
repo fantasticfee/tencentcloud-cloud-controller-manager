@@ -128,9 +128,9 @@ func (rc *RouteController) reconcileNodeRoutes() error {
 	}
 	labelset := labels.Set{}
 	labelset["cloudProvider"] = "tencent"
-	nodes, err = s.nodeLister.List(labels.SelectorFromSet(labelset))
+	nodes, err := rc.nodeLister.List(labels.SelectorFromSet(labelset))
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("error listing nodes: %v", err)
 	}
 	/*
 	nodes, err := rc.nodeLister.List(labels.Everything())
