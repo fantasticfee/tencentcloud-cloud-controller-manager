@@ -132,6 +132,7 @@ func (rc *RouteController) reconcileNodeRoutes() error {
 	if err != nil {
 		return fmt.Errorf("error listing nodes: %v", err)
 	}
+        fmt.Println("reconcileNodeRoutes nodes:",nodes)
 	/*
 	nodes, err := rc.nodeLister.List(labels.Everything())
 	if err != nil {
@@ -157,9 +158,11 @@ func (rc *RouteController) reconcile(nodes []*v1.Node, routes []*cloudprovider.R
 
 	for _, node := range nodes {
 		// Skip if the node hasn't been assigned a CIDR yet.
+                /*
 		if node.Spec.PodCIDR == "" {
 			continue
 		}
+                */
 		nodeName := types.NodeName(node.Name)
 		// Check if we have a route for this node w/ the correct CIDR.
 		r := routeMap[nodeName]

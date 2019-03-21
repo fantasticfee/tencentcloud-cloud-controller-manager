@@ -2,9 +2,9 @@ package tencentcloud
 
 import (
 	"context"
-	"errors"
+	//"errors"
 	"fmt"
-	"strings"
+	//"strings"
 
 	"github.com/dbdd4us/qcloudapi-sdk-go/cvm"
 
@@ -38,6 +38,7 @@ func (cloud *Cloud) NodeAddresses(ctx context.Context, name types.NodeName) ([]v
 // from the node whose nodeaddresses are being queried. i.e. local metadata
 // services cannot be used in this method to obtain nodeaddresses
 func (cloud *Cloud) NodeAddressesByProviderID(ctx context.Context, providerID string) ([]v1.NodeAddress, error) {
+/*
 	id := strings.TrimPrefix(providerID, fmt.Sprintf("%s://", providerName))
 	parts := strings.Split(id, "/")
 	if len(parts) == 3 {
@@ -55,6 +56,8 @@ func (cloud *Cloud) NodeAddressesByProviderID(ctx context.Context, providerID st
 		return addresses, nil
 	}
 	return []v1.NodeAddress{}, errors.New(fmt.Sprintf("invalid format for providerId %s", providerID))
+*/
+			return []v1.NodeAddress{}, nil
 }
 
 // ExternalID returns the cloud provider ID of the node with the specified NodeName.

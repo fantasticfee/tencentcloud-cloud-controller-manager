@@ -3,6 +3,7 @@ package common
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+        "crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -89,6 +90,7 @@ func NewClient(credential CredentialInterface, opts Opts) (*Client, error) {
 }
 
 func (client *Client) Invoke(action string, args interface{}, response interface{}) error {
+        //fmt.Println("getInvoke clinet:", client.opts, client.credential)
 	switch client.opts.Method {
 	case "GET":
 		return client.InvokeWithGET(action, args, response)
@@ -98,6 +100,7 @@ func (client *Client) Invoke(action string, args interface{}, response interface
 }
 
 func (client *Client) initCommonArgs(args *url.Values) {
+        //fmt.Println("initCommonArgs:",args)
 	args.Set("Region", client.opts.Region)
 	args.Set("Timestamp", fmt.Sprint(uint(time.Now().Unix())))
 	args.Set("Nonce", fmt.Sprint(uint(rand.Int())))
@@ -120,11 +123,14 @@ func (client *Client) signGetRequest(secretId, secretKey string, values *url.Val
 	queryStr := strings.Join(kvs, "&")
 	reqStr := fmt.Sprintf("GET%s%s?%s", client.opts.Host, client.opts.Path, queryStr)
 
+        //fmt.Println("signGetRequest reqStr:", reqStr)
 	mac := hmac.New(sha256.New, []byte(secretKey))
 	mac.Write([]byte(reqStr))
 	signature := mac.Sum(nil)
 
+        //fmt.Println("before base64 signature:", string(signature))
 	b64Encoded := base64.StdEncoding.EncodeToString(signature)
+        //fmt.Println("base64ed signature:", b64Encoded)
 
 	return b64Encoded
 }
@@ -140,6 +146,11 @@ func (client *Client) InvokeWithGET(action string, args interface{}, response in
 	for k, v := range credValues {
 		reqValues.Set(k, v)
 	}
+
+        tr := &http.Transport{
+        TLSClientConfig:    &tls.Config{InsecureSkipVerify: true},
+	}
+	client.Client.Transport = tr
 
 	err = EncodeStruct(args, &reqValues)
 	if err != nil {
@@ -157,16 +168,22 @@ func (client *Client) InvokeWithGET(action string, args interface{}, response in
 		return makeClientError(err)
 	}
 
+        //fmt.Println("secretId: ",secretId)
 	signature := client.signGetRequest(secretId, secretKey, &reqValues)
+        //fmt.Println("signature: ",signature)
+	reqValues.Set("SecretId", secretId)
 	reqValues.Set("Signature", signature)
 
+        //fmt.Println("Region:",reqValues.Get("Region"),"RouteTableName:",reqValues.Get("RouteTableName"), "SecretId:",reqValues.Get("SecretId"))
 	reqQuery := reqValues.Encode()
+        //fmt.Println("reqQuery:",reqQuery)
 
 	req, err := http.NewRequest(
 		"GET",
 		fmt.Sprintf("%s://%s%s?%s", client.opts.Schema, client.opts.Host, client.opts.Path, reqQuery),
 		nil,
 	)
+        //fmt.Println("base send req: ",req)
 
 	if err != nil {
 		return makeClientError(err)

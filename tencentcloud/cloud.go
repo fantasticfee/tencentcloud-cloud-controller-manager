@@ -1,11 +1,13 @@
 package tencentcloud
 
 import (
-	"encoding/json"
+	//"encoding/json"
 	"errors"
 	"io"
-	"io/ioutil"
+	//"io/ioutil"
 	"os"
+        "fmt"
+         "strings"
 
 	"github.com/dbdd4us/qcloudapi-sdk-go/ccs"
 	"github.com/dbdd4us/qcloudapi-sdk-go/clb"
@@ -29,8 +31,19 @@ func init() {
 	cloudprovider.RegisterCloudProvider(providerName, NewCloud)
 }
 
+func deleteLinebreak(str string) string {
+     str = strings.Replace(str, "\n", "", -1)
+/*
+     if str[len(str)-1] == '\n' {
+              str[len(str)-1] = 0
+     }
+*/
+    return str
+}
+
 func NewCloud(config io.Reader) (cloudprovider.Interface, error) {
 	var c Config
+/*
 	if config != nil {
 		cfg, err := ioutil.ReadAll(config)
 		if err != nil {
@@ -40,23 +53,25 @@ func NewCloud(config io.Reader) (cloudprovider.Interface, error) {
 			return nil, err
 		}
 	}
+*/
 
 	if c.Region == "" {
-		c.Region = os.Getenv("TENCENTCLOUD_CLOUD_CONTROLLER_MANAGER_REGION")
+		c.Region = deleteLinebreak(os.Getenv("TENCENTCLOUD_CLOUD_CONTROLLER_MANAGER_REGION"))
 	}
 	if c.VpcId == "" {
-		c.VpcId = os.Getenv("TENCENTCLOUD_CLOUD_CONTROLLER_MANAGER_VPC_ID")
+		c.VpcId = deleteLinebreak(os.Getenv("TENCENTCLOUD_CLOUD_CONTROLLER_MANAGER_VPC_ID"))
 	}
 	if c.SecretId == "" {
-		c.SecretId = os.Getenv("TENCENTCLOUD_CLOUD_CONTROLLER_MANAGER_SECRET_ID")
+		c.SecretId = deleteLinebreak(os.Getenv("TENCENTCLOUD_CLOUD_CONTROLLER_MANAGER_SECRET_ID"))
 	}
 	if c.SecretKey == "" {
-		c.SecretKey = os.Getenv("TENCENTCLOUD_CLOUD_CONTROLLER_MANAGER_SECRET_KEY")
+		c.SecretKey = deleteLinebreak(os.Getenv("TENCENTCLOUD_CLOUD_CONTROLLER_MANAGER_SECRET_KEY"))
 	}
 
 	if c.ClusterRouteTable == "" {
-		c.ClusterRouteTable = os.Getenv("TENCENTCLOUD_CLOUD_CONTROLLER_MANAGER_CLUSTER_ROUTE_TABLE")
+		c.ClusterRouteTable = deleteLinebreak(os.Getenv("TENCENTCLOUD_CLOUD_CONTROLLER_MANAGER_CLUSTER_ROUTE_TABLE"))
 	}
+        fmt.Printf("region %s,secretid %s,routertable %s   aaaaaaaaa/n",c.Region,c.SecretId,c.ClusterRouteTable)
 
 	return &Cloud{config: c}, nil
 }

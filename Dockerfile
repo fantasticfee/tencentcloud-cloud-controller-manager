@@ -1,6 +1,4 @@
-FROM alpine:3.6
-
-RUN apk add --no-cache ca-certificates
+FROM ubuntu:16.04
 
 ADD tencentcloud-cloud-controller-manager /bin/
 
