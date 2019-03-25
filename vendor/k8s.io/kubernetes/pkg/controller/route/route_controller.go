@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/tencentcloud/tencentcloud-cloud-controller-manager/app"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -132,24 +133,42 @@ func (rc *RouteController) reconcileNodeRoutes() error {
 	if err != nil {
 		return fmt.Errorf("error listing nodes: %v", err)
 	}
-        fmt.Println("reconcileNodeRoutes nodes:",nodes)
+	fmt.Println("reconcileNodeRoutes nodes:", nodes)
 	/*
-	nodes, err := rc.nodeLister.List(labels.Everything())
-	if err != nil {
-		return fmt.Errorf("error listing nodes: %v", err)
-	}
+		nodes, err := rc.nodeLister.List(labels.Everything())
+		if err != nil {
+			return fmt.Errorf("error listing nodes: %v", err)
+		}
 	*/
 	return rc.reconcile(nodes, routeList)
 }
 
+func inArray(item string, array []string) bool {
+	for i := 0; i < len(array); i++ {
+		if item == array[i] {
+			return true
+		}
+	}
+	return false
+}
+
+func cidrForNode(nodes []*v1.Node, name string) string {
+	for _, node := range nodes {
+		if node.Name == name {
+			return node.Spec.PodCIDR
+		}
+	}
+	return ""
+}
+
 func (rc *RouteController) reconcile(nodes []*v1.Node, routes []*cloudprovider.Route) error {
 	// nodeCIDRs maps nodeName->nodeCIDR
-	nodeCIDRs := make(map[types.NodeName]string)
+	//nodeCIDRs := make(map[types.NodeName]string)
 	// routeMap maps routeTargetNode->route
-	routeMap := make(map[types.NodeName]*cloudprovider.Route)
+	routeMap := make(map[types.NodeName][]*cloudprovider.Route)
 	for _, route := range routes {
 		if route.TargetNode != "" {
-			routeMap[route.TargetNode] = route
+			routeMap[route.TargetNode] = append(routeMap[route.TargetNode], route)
 		}
 	}
 
@@ -157,80 +176,98 @@ func (rc *RouteController) reconcile(nodes []*v1.Node, routes []*cloudprovider.R
 	rateLimiter := make(chan struct{}, maxConcurrentRouteCreations)
 
 	for _, node := range nodes {
-		// Skip if the node hasn't been assigned a CIDR yet.
-                /*
-		if node.Spec.PodCIDR == "" {
+		var podCidrs []string
+		if value, exist := app.IpamHostMap2Block.Get(node.Name); !exist {
 			continue
+		} else {
+			var ok bool
+			if podCidrs, ok = value.([]string); !ok {
+				glog.Error("podCidrs not []string")
+				continue
+			}
 		}
-                */
+
 		nodeName := types.NodeName(node.Name)
 		// Check if we have a route for this node w/ the correct CIDR.
-		r := routeMap[nodeName]
-		//if r == nil {
-		if r == nil || r.DestinationCIDR != node.Spec.PodCIDR {
-			// If not, create the route.
-			route := &cloudprovider.Route{
-				TargetNode:      nodeName,
-				DestinationCIDR: "10.11.21.0/24",//node.Spec.PodCIDR,
-			}
-			nameHint := string(node.UID)
-			wg.Add(1)
-			go func(nodeName types.NodeName, nameHint string, route *cloudprovider.Route) {
-				defer wg.Done()
-				for i := 0; i < maxRetries; i++ {
-					startTime := time.Now()
-					// Ensure that we don't have more than maxConcurrentRouteCreations
-					// CreateRoute calls in flight.
-					rateLimiter <- struct{}{}
-					glog.Infof("Creating route for node %s %s with hint %s, throttled %v", nodeName, route.DestinationCIDR, nameHint, time.Now().Sub(startTime))
-					err := rc.routes.CreateRoute(context.TODO(), rc.clusterName, nameHint, route)
-					<-rateLimiter
-
-					rc.updateNetworkingCondition(nodeName, err == nil)
-					if err != nil {
-						msg := fmt.Sprintf("Could not create route %s %s for node %s after %v: %v", nameHint, route.DestinationCIDR, nodeName, time.Now().Sub(startTime), err)
-						if rc.recorder != nil {
-							rc.recorder.Eventf(
-								&v1.ObjectReference{
-									Kind:      "Node",
-									Name:      string(nodeName),
-									UID:       types.UID(nodeName),
-									Namespace: "",
-								}, v1.EventTypeWarning, "FailedToCreateRoute", msg)
-						}
-						glog.Error(msg)
-
-					} else {
-						glog.Infof("Created route for node %s %s with hint %s after %v", nodeName, route.DestinationCIDR, nameHint, time.Now().Sub(startTime))
-						return
-					}
-				}
-			}(nodeName, nameHint, route)
-		} else {
-			// Update condition only if it doesn't reflect the current state.
-			_, condition := v1node.GetNodeCondition(&node.Status, v1.NodeNetworkUnavailable)
-			if condition == nil || condition.Status != v1.ConditionFalse {
-				rc.updateNetworkingCondition(types.NodeName(node.Name), true)
-			}
+		rs := routeMap[nodeName]
+		glog.Infof("Node: %s, r=%+v, node.Spec.PodCIDR=%s", node.Name, rs, podCidrs)
+		var existDstCidrs = []string{}
+		for _, r := range rs {
+			existDstCidrs = append(existDstCidrs, r.DestinationCIDR)
 		}
-		nodeCIDRs[nodeName] = node.Spec.PodCIDR
+
+		for _, podCidr := range podCidrs {
+			if rs == nil || !inArray(podCidr, existDstCidrs) {
+				// If not, create the route.
+				route := &cloudprovider.Route{
+					TargetNode:      nodeName,
+					DestinationCIDR: podCidr, //node.Spec.PodCIDR,
+				}
+				nameHint := string(node.UID)
+				wg.Add(1)
+				go func(nodeName types.NodeName, nameHint string, route *cloudprovider.Route) {
+					defer wg.Done()
+					for i := 0; i < maxRetries; i++ {
+						startTime := time.Now()
+						// Ensure that we don't have more than maxConcurrentRouteCreations
+						// CreateRoute calls in flight.
+						rateLimiter <- struct{}{}
+						glog.Infof("Creating route for node %s %s with hint %s, throttled %v", nodeName, route.DestinationCIDR, nameHint, time.Now().Sub(startTime))
+						err := rc.routes.CreateRoute(context.TODO(), rc.clusterName, nameHint, route)
+						<-rateLimiter
+
+						rc.updateNetworkingCondition(nodeName, err == nil)
+						if err != nil {
+							msg := fmt.Sprintf("Could not create route %s %s for node %s after %v: %v", nameHint, route.DestinationCIDR, nodeName, time.Now().Sub(startTime), err)
+							if rc.recorder != nil {
+								rc.recorder.Eventf(
+									&v1.ObjectReference{
+										Kind:      "Node",
+										Name:      string(nodeName),
+										UID:       types.UID(nodeName),
+										Namespace: "",
+									}, v1.EventTypeWarning, "FailedToCreateRoute", msg)
+							}
+							glog.Error(msg)
+
+						} else {
+							glog.Infof("Created route for node %s %s with hint %s after %v", nodeName, route.DestinationCIDR, nameHint, time.Now().Sub(startTime))
+							return
+						}
+					}
+				}(nodeName, nameHint, route)
+			} else {
+				// Update condition only if it doesn't reflect the current state.
+				_, condition := v1node.GetNodeCondition(&node.Status, v1.NodeNetworkUnavailable)
+				if condition == nil || condition.Status != v1.ConditionFalse {
+					rc.updateNetworkingCondition(types.NodeName(node.Name), true)
+				}
+			}
+			//nodeCIDRs[nodeName] = node.Spec.PodCIDR
+		}
 	}
 	for _, route := range routes {
 		if rc.isResponsibleForRoute(route) {
 			// Check if this route is a blackhole, or applies to a node we know about & has an incorrect CIDR.
-			if route.Blackhole || (nodeCIDRs[route.TargetNode] != route.DestinationCIDR) {
-				wg.Add(1)
-				// Delete the route.
-				go func(route *cloudprovider.Route, startTime time.Time) {
-					glog.Infof("Deleting route %s %s", route.Name, route.DestinationCIDR)
-					if err := rc.routes.DeleteRoute(context.TODO(), rc.clusterName, route); err != nil {
-						glog.Errorf("Could not delete route %s %s after %v: %v", route.Name, route.DestinationCIDR, time.Now().Sub(startTime), err)
-					} else {
-						glog.Infof("Deleted route %s %s after %v", route.Name, route.DestinationCIDR, time.Now().Sub(startTime))
-					}
-					wg.Done()
+			//if route.Blackhole || (nodeCIDRs[route.TargetNode] != route.DestinationCIDR) {
+			if value, ok := app.IpamHostMap2Block.Get(string(route.TargetNode)); ok {
+				if blocks, ok := value.([]string); ok {
+					if route.Blackhole || !inArray(route.DestinationCIDR, blocks) {
+						glog.Infof("responsible for: %t, %t,%t", route.Blackhole, cidrForNode(nodes, string(route.TargetNode)) != route.DestinationCIDR, route.Blackhole || (cidrForNode(nodes, string(route.TargetNode)) != route.DestinationCIDR))
+						wg.Add(1)
+						// Delete the route.
+						go func(route *cloudprovider.Route, startTime time.Time) {
+							glog.Infof("Deleting route %s %s", route.Name, route.DestinationCIDR)
+							if err := rc.routes.DeleteRoute(context.TODO(), rc.clusterName, route); err != nil {
+								glog.Errorf("Could not delete route %s %s after %v: %v", route.Name, route.DestinationCIDR, time.Now().Sub(startTime), err)
+							} else {
+								glog.Infof("Deleted route %s %s after %v", route.Name, route.DestinationCIDR, time.Now().Sub(startTime))
+							}
+							wg.Done()
 
-				}(route, time.Now())
+						}(route, time.Now())
+					}
+				}
 			}
 		}
 	}
