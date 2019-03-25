@@ -166,8 +166,8 @@ func (rc *RouteController) reconcile(nodes []*v1.Node, routes []*cloudprovider.R
 		nodeName := types.NodeName(node.Name)
 		// Check if we have a route for this node w/ the correct CIDR.
 		r := routeMap[nodeName]
-		//if r == nil || r.DestinationCIDR != node.Spec.PodCIDR {
-		if r == nil {
+		//if r == nil {
+		if r == nil || r.DestinationCIDR != node.Spec.PodCIDR {
 			// If not, create the route.
 			route := &cloudprovider.Route{
 				TargetNode:      nodeName,
