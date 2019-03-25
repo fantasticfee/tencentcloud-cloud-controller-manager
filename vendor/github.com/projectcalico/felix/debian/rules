@@ -1,0 +1,29 @@
+#!/usr/bin/make -f
+
+export CALICODEPS = none
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+%:
+	dh $@  --with systemd
+
+override_dh_install:
+	install -d debian/tmp/usr/etc/calico
+	install etc/*.cfg.example debian/tmp/usr/etc/calico
+	install -d debian/tmp/usr/share/calico/bird
+	install -m 644 etc/bird/*.template debian/tmp/usr/share/calico/bird
+	install -d debian/tmp/usr/bin
+	install -m 755 bin/* debian/tmp/usr/bin/
+	dh_install
+
+# strip fails on some of our binaries, disable it.
+override_dh_strip:
+	true
+
+# Prevent debhelper from trying to rebuild or register our shared libraries,
+# they're only intended for our pyinstaller bundle.
+override_dh_makeshlibs:
+	true
+override_dh_shlibdeps:
+	true
