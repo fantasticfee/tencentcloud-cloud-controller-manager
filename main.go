@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	tcapp "github.com/tencentcloud/tencentcloud-cloud-controller-manager/app"
 	_ "github.com/tencentcloud/tencentcloud-cloud-controller-manager/tencentcloud"
 
 	utilflag "k8s.io/apiserver/pkg/util/flag"
@@ -27,6 +28,9 @@ func main() {
 
 	logs.InitLogs()
 	defer logs.FlushLogs()
+
+	trigerCh := make(chan struct{})
+	go tcapp.RunCalicoHostSyncer(trigerCh)
 
 	if err := command.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)

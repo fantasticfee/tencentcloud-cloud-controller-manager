@@ -6,7 +6,7 @@ import (
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	glog "github.com/sirupsen/logrus"
 
-	globalCfg "route-controller/config"
+	globalCfg "github.com/tencentcloud/tencentcloud-cloud-controller-manager/config"
 
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
