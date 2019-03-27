@@ -277,6 +277,10 @@ func (s *ServiceController) createLoadBalancerIfNeeded(key string, service *v1.S
 	// Note: It is safe to just call EnsureLoadBalancer.  But, on some clouds that requires a delete & create,
 	// which may involve service interruption.  Also, we would like user-friendly events.
 
+	// check if loadbalancer is tencent cloud
+	if service.Annotations["cloudProvider"] != "tencent" {
+		return nil
+	}
 	// Save the state so we can avoid a write if it doesn't change
 	previousState := v1helper.LoadBalancerStatusDeepCopy(&service.Status.LoadBalancer)
 	var newState *v1.LoadBalancerStatus
