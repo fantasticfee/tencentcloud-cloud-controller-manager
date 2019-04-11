@@ -3,7 +3,7 @@ package tencentcloud
 import (
 	"context"
 	"errors"
-	"fmt"
+	//"fmt"
 	"k8s.io/api/core/v1"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 
@@ -49,7 +49,7 @@ var (
 func (cloud *Cloud) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (status *v1.LoadBalancerStatus, exists bool, err error) {
 	loadBalancerName := cloudprovider.GetLoadBalancerName(service)
 
-	fmt.Println("come in GetLoadBalancer name: ", service)
+	//fmt.Println("come in GetLoadBalancer name: ", service)
 	loadBalancer, err := cloud.getLoadBalancerByName(loadBalancerName)
 	if err != nil {
 		if err == ErrCloudLoadBalancerNotFound {

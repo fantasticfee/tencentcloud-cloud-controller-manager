@@ -34,7 +34,7 @@ func listRoutes(config Config) (*vpc.DescribeRouteTablesResponse, error) {
 	}
 */
         request.RouteTableIds = append(request.RouteTableIds,&config.ClusterRouteTableId)
-        fmt.Printf("listRoutes request %s method %s",request.ToJsonString(),request.GetHttpMethod())
+        //fmt.Printf("listRoutes request %s method %s",request.ToJsonString(),request.GetHttpMethod())
 	response, err := client.DescribeRouteTables(request)
 	if _, ok := err.(*errors.TencentCloudSDKError); ok {
 		fmt.Printf("An API error has returned: %s", err)
@@ -45,7 +45,7 @@ func listRoutes(config Config) (*vpc.DescribeRouteTablesResponse, error) {
 		return nil,err
 		//panic(err)
 	}
-        fmt.Printf("listRoutes response %s", response.ToJsonString())
+        //fmt.Printf("listRoutes response %s", response.ToJsonString())
 	return response,nil
 
 }
@@ -142,10 +142,10 @@ func (cloud *Cloud) ListRoutes(ctx context.Context, clusterName string) ([]*clou
 	//fmt.Println("come in ListRoutes config:", cloud.config)
 	cloudRoutes, err := listRoutes(cloud.config)
 	if err != nil {
-		fmt.Println("list error:", err)
+		fmt.Println("list route error:", err)
 		return []*cloudprovider.Route{}, err
 	}
-        fmt.Println("after listRoutes")
+        //fmt.Println("after listRoutes")
 	if len(cloudRoutes.Response.RouteTableSet) == 0 {
 		fmt.Println("no route")
 		return []*cloudprovider.Route{}, nil
@@ -162,7 +162,7 @@ func (cloud *Cloud) ListRoutes(ctx context.Context, clusterName string) ([]*clou
 // route.Name will be ignored, although the cloud-provider may use nameHint
 // to create a more user-meaningful name.
 func (cloud *Cloud) CreateRoute(ctx context.Context, clusterName string, nameHint string, route *cloudprovider.Route) error {
-        fmt.Println("come in CreateRoute")
+        //fmt.Println("come in CreateRoute")
 	/*
 		_, err := cloud.ccs.CreateClusterRoute(&ccs.CreateClusterRouteArgs{
 			RouteTableName:       cloud.config.ClusterRouteTable,

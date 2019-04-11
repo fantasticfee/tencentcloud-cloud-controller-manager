@@ -69,6 +69,8 @@ const (
 	// LabelNodeRoleExcludeBalancer specifies that the node should be
 	// exclude from load balancers created by a cloud provider.
 	LabelNodeRoleExcludeBalancer = "alpha.service-controller.kubernetes.io/exclude-balancer"
+ 	
+	NotTencentLoadBalancerError = "Not Tencent LB"
 )
 
 type cachedService struct {
@@ -212,6 +214,13 @@ func (s *ServiceController) processNextWorkItem() bool {
 	defer s.queue.Done(key)
 
 	err := s.syncService(key.(string))
+
+	if err != nil && err.Error() == NotTencentLoadBalancerError {
+		fmt.Printf("sync service %v error: %v/n", key, err.Error())
+		s.queue.Forget(key)
+		return true
+	}
+
 	if err == nil {
 		s.queue.Forget(key)
 		return true
@@ -258,6 +267,11 @@ func (s *ServiceController) processServiceUpdate(cachedService *cachedService, s
 			eventType = "CleanupLoadBalancerFailed"
 			message = "Error cleaning up load balancer (will retry): "
 		}
+
+		if err.Error() == NotTencentLoadBalancerError {
+			message = "Not tencent load balancer: " 
+		}
+
 		message += err.Error()
 		s.eventRecorder.Event(service, v1.EventTypeWarning, eventType, message)
 		return err
@@ -279,8 +293,9 @@ func (s *ServiceController) createLoadBalancerIfNeeded(key string, service *v1.S
 
 	// check if loadbalancer is tencent cloud
 	if service.Annotations["cloudProvider"] != "tencent" {
-		return nil
+		return fmt.Errorf("Not Tencent LB")
 	}
+
 	// Save the state so we can avoid a write if it doesn't change
 	previousState := v1helper.LoadBalancerStatusDeepCopy(&service.Status.LoadBalancer)
 	var newState *v1.LoadBalancerStatus

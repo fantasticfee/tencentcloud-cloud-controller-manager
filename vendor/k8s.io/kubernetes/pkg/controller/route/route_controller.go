@@ -133,7 +133,7 @@ func (rc *RouteController) reconcileNodeRoutes() error {
 	if err != nil {
 		return fmt.Errorf("error listing nodes: %v", err)
 	}
-	fmt.Println("reconcileNodeRoutes nodes:", nodes)
+	//fmt.Println("reconcileNodeRoutes nodes:", nodes)
 	/*
 		nodes, err := rc.nodeLister.List(labels.Everything())
 		if err != nil {
