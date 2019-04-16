@@ -49,10 +49,17 @@ var (
 )
 
 func (cloud *Cloud) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (status *v1.LoadBalancerStatus, exists bool, err error) {
-	loadBalancerName := cloudprovider.GetLoadBalancerName(service)
+	var loadBalancer *clb.LoadBalancer
+	var loadBalancerName string
 
-	//fmt.Println("come in GetLoadBalancer name: ", service)
-	loadBalancer, err := cloud.getLoadBalancerByName(loadBalancerName)
+	loadBalancerId := service.Annotations[ServiceAnnotationLoadBalancerId]
+	if loadBalancerId != "" {
+		loadBalancer, err = cloud.getLoadBalancerById(loadBalancerId)
+	} else {
+		loadBalancerName = cloudprovider.GetLoadBalancerName(service)
+		loadBalancer, err = cloud.getLoadBalancerByName(loadBalancerName)
+	}
+
 	if err != nil {
 		if err == ErrCloudLoadBalancerNotFound {
 			return nil, false, nil
@@ -124,7 +131,9 @@ func (cloud *Cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, 
 	return cloud.ensureLoadBalancerBackends(ctx, clusterName, service, nodes)
 }
 
-func (cloud *Cloud) EnsureLBListenersDeleted(ctx context.Context, clusterName string, service *v1.Service) error {
+func (cloud *Cloud) ensureLBListenersDeleted(ctx context.Context, clusterName string, service *v1.Service) error {
+	var listenerId string
+
 	loadBalancerId := service.Annotations[ServiceAnnotationLoadBalancerId]
 	loadBalancer, err := cloud.getLoadBalancerById(loadBalancerId)
 	response, err := cloud.clb.DescribeForwardLBListeners(&clb.DescribeForwardLBListenersArgs{
@@ -156,7 +165,14 @@ func (cloud *Cloud) EnsureLBListenersDeleted(ctx context.Context, clusterName st
 }
 
 func (cloud *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName string, service *v1.Service) error {
-	_, err := cloud.getLoadBalancerByName(cloudprovider.GetLoadBalancerName(service))
+	var err error
+
+	loadBalancerId := service.Annotations[ServiceAnnotationLoadBalancerId]
+	if loadBalancerId != "" {
+		return cloud.ensureLBListenersDeleted(ctx, clusterName, service)
+	} else {
+		_, err = cloud.getLoadBalancerByName(cloudprovider.GetLoadBalancerName(service))
+	}
 	if err != nil {
 		if err == ErrCloudLoadBalancerNotFound {
 			return nil

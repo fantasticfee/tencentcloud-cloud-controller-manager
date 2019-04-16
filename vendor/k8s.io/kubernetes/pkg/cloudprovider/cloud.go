@@ -115,10 +115,6 @@ type LoadBalancer interface {
 	// Implementations must treat the *v1.Service parameter as read-only and not modify it.
 	// Parameter 'clusterName' is the name of the cluster as presented to kube-controller-manager
 	EnsureLoadBalancerDeleted(ctx context.Context, clusterName string, service *v1.Service) error
-
-	//add by zhaoyu
-	//delete the specified service map listeners port
-	EnsureLBListenersDeleted(ctx context.Context, clusterName string, service *v1.Service) error
 }
 
 // Instances is an abstract, pluggable interface for sets of instances.

@@ -304,9 +304,6 @@ func (s *ServiceController) createLoadBalancerIfNeeded(key string, service *v1.S
 	var err error
 
 	if !wantsLoadBalancer(service) {
-		if service.Annotations[ServiceAnnotationLoadBalancerId] != "" {
-			return s.balancer.EnsureLBListenersDeleted(context.TODO(), s.clusterName, service)
-		}
 		_, exists, err := s.balancer.GetLoadBalancer(context.TODO(), s.clusterName, service)
 		if err != nil {
 			return fmt.Errorf("error getting LB for service %s: %v", key, err)
