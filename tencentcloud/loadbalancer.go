@@ -3,7 +3,7 @@ package tencentcloud
 import (
 	"context"
 	"errors"
-	//"fmt"
+	"fmt"
 	"k8s.io/api/core/v1"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 
@@ -29,6 +29,7 @@ const (
 	// name annotation for loadbalancer
 	ServiceAnnotationLoadBalancerName        = "service.beta.kubernetes.io/tencentcloud-loadbalancer-name"
 	ServiceAnnotationLoadBalancerNameDefault = "kubernetes-loadbalancer"
+	ServiceAnnotationLoadBalancerId = "service.beta.kubernetes.io/tencent-loadbalancer-id"
 )
 
 var (
@@ -92,9 +93,19 @@ func (cloud *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, 
 		return nil, err
 	}
 
-	loadBalancer, err := cloud.getLoadBalancerByName(cloudprovider.GetLoadBalancerName(service))
+	var loadBalancer *clb.LoadBalancer
+
+	loadBalancerId := service.Annotations[ServiceAnnotationLoadBalancerId]
+	if loadBalancerId != "" {
+		loadBalancer, err = cloud.getLoadBalancerById(loadBalancerId)
+	} else {
+		loadBalancer, err = cloud.getLoadBalancerByName(cloudprovider.GetLoadBalancerName(service))
+	}
 	if err != nil {
 		return nil, err
+	}
+	if loadBalancer == nil {
+		return nil,fmt.Errorf("can't find the loadBalancer :",loadBalancerId)
 	}
 
 	ingresses := make([]v1.LoadBalancerIngress, len(loadBalancer.LoadBalancerVips))
@@ -140,10 +151,37 @@ func (cloud *Cloud) getLoadBalancerByName(name string) (*clb.LoadBalancer, error
 	return &response.LoadBalancerSet[0], nil
 }
 
-func (cloud *Cloud) ensureLoadBalancerInstance(ctx context.Context, clusterName string, service *v1.Service) error {
-	loadBalancerName := cloudprovider.GetLoadBalancerName(service)
+func (cloud *Cloud) getLoadBalancerById(id string) (*clb.LoadBalancer, error) {
+	// we don't need to check loadbalancer kind here because ensureLoadBalancerInstance will ensure the kind is right
+	forward := -1
+        var lbIds []string
+ 	lbIds = append(lbIds, id)
+	response, err := cloud.clb.DescribeLoadBalancers(&clb.DescribeLoadBalancersArgs{
+                LoadBalancerIds: &lbIds,
+		Forward: &forward,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(response.LoadBalancerSet) < 1 {
+		return nil, ErrCloudLoadBalancerNotFound
+	}
 
-	loadBalancer, err := cloud.getLoadBalancerByName(loadBalancerName)
+	return &response.LoadBalancerSet[0], nil
+}
+
+func (cloud *Cloud) ensureLoadBalancerInstance(ctx context.Context, clusterName string, service *v1.Service) error {
+	var err error
+	var loadBalancer *clb.LoadBalancer
+	var loadBalancerName  string
+	loadBalancerId := service.Annotations[ServiceAnnotationLoadBalancerId]
+	if loadBalancerId != "" {
+		loadBalancer, err = cloud.getLoadBalancerById(loadBalancerId)
+	} else {
+		loadBalancerName = cloudprovider.GetLoadBalancerName(service)
+		loadBalancer, err = cloud.getLoadBalancerByName(loadBalancerName)
+	}
+
 	if err != nil {
 		if err != ErrCloudLoadBalancerNotFound {
 			return err
@@ -152,6 +190,7 @@ func (cloud *Cloud) ensureLoadBalancerInstance(ctx context.Context, clusterName 
 		if err != nil {
 			return err
 		}
+		loadBalancerId = ""
 	}
 
 	loadBalancerDesiredKind, ok := service.Annotations[ServiceAnnotationLoadBalancerKind]
@@ -193,6 +232,10 @@ func (cloud *Cloud) ensureLoadBalancerInstance(ctx context.Context, clusterName 
 	default:
 		needRecreate = true
 	}
+	
+	if loadBalancerId != "" {
+		needRecreate = false
+	}
 
 	if needRecreate {
 		if err := cloud.deleteLoadBalancer(ctx, clusterName, service); err != nil {
@@ -207,12 +250,25 @@ func (cloud *Cloud) ensureLoadBalancerInstance(ctx context.Context, clusterName 
 }
 
 func (cloud *Cloud) ensureLoadBalancerListeners(ctx context.Context, clusterName string, service *v1.Service) error {
-	loadBalancerName := cloudprovider.GetLoadBalancerName(service)
+	var err error
+	var loadBalancer *clb.LoadBalancer
+	var loadBalancerName  string
 
-	loadBalancer, err := cloud.getLoadBalancerByName(loadBalancerName)
-	if err != nil {
-		return err
+	loadBalancerId := service.Annotations[ServiceAnnotationLoadBalancerId]
+	if loadBalancerId != "" {
+		loadBalancer, err = cloud.getLoadBalancerById(loadBalancerId)
+	} else {
+		loadBalancerName = cloudprovider.GetLoadBalancerName(service)
+
+		loadBalancer, err = cloud.getLoadBalancerByName(loadBalancerName)
+		if err != nil {
+			return err
+		}
 	}
+	if loadBalancer == nil {
+		return fmt.Errorf("can't find the loadBalancer: ", loadBalancerId)
+	}
+	
 
 	switch loadBalancer.Forward {
 	case ClbLoadBalancerKindClassic:
@@ -383,6 +439,7 @@ func (cloud *Cloud) ensureApplicationLoadBalancerListeners(ctx context.Context, 
 		}
 
 		if !ensured {
+			fmt.Println("ensure listenersToCreate port.Port: ",port.Port)
 			listenersToCreate = append(listenersToCreate, clb.CreateFourthLayerListenerOpts{
 				LoadBalancerPort: int(port.Port),
 				Protocol:         cloud.mapServicePortProtoClbProto(port.Protocol),
@@ -390,6 +447,7 @@ func (cloud *Cloud) ensureApplicationLoadBalancerListeners(ctx context.Context, 
 		}
 	}
 
+/*
 	listenersToDelete := make([]string, 0)
 
 	for _, listener := range loadBalancerListeners {
@@ -402,11 +460,13 @@ func (cloud *Cloud) ensureApplicationLoadBalancerListeners(ctx context.Context, 
 		}
 
 		if !used {
+			fmt.Println("ensure listenersToDelete ")
 			listenersToDelete = append(listenersToDelete, listener.ListenerId)
 		}
 	}
 
 	for _, unusedListener := range listenersToDelete {
+			fmt.Println("ensure listenersToDelete LoadBalancerId: ",loadBalancer.LoadBalancerId)
 		result, err := clb.WaitUntilDone(
 			func() (clb.AsyncTask, error) {
 				return cloud.clb.DeleteForwardLBListener(&clb.DeleteForwardLBListenerArgs{
@@ -423,8 +483,10 @@ func (cloud *Cloud) ensureApplicationLoadBalancerListeners(ctx context.Context, 
 			return errors.New("task is not succeed")
 		}
 	}
+*/
 
 	if len(listenersToCreate) > 0 {
+			fmt.Println("ensure listenersToCreate LoadBalancerId: ",loadBalancer.LoadBalancerId)
 		result, err := clb.WaitUntilDone(
 			func() (clb.AsyncTask, error) {
 				return cloud.clb.CreateForwardLBFourthLayerListeners(&clb.CreateForwardLBFourthLayerListenersArgs{
@@ -446,11 +508,23 @@ func (cloud *Cloud) ensureApplicationLoadBalancerListeners(ctx context.Context, 
 }
 
 func (cloud *Cloud) ensureLoadBalancerBackends(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) error {
-	loadBalancerName := cloudprovider.GetLoadBalancerName(service)
+	var err error
+	var loadBalancer *clb.LoadBalancer
+	var loadBalancerName  string
 
-	loadBalancer, err := cloud.getLoadBalancerByName(loadBalancerName)
-	if err != nil {
-		return err
+	loadBalancerId := service.Annotations[ServiceAnnotationLoadBalancerId]
+	if loadBalancerId != "" {
+		loadBalancer, err = cloud.getLoadBalancerById(loadBalancerId)
+	} else {
+		loadBalancerName = cloudprovider.GetLoadBalancerName(service)
+
+		loadBalancer, err = cloud.getLoadBalancerByName(loadBalancerName)
+		if err != nil {
+			return err
+		}
+	}
+	if loadBalancer == nil {
+		return fmt.Errorf("can't find the loadBalancer :",loadBalancerId)
 	}
 
 	switch loadBalancer.Forward {
