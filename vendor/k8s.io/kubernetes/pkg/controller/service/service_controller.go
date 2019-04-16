@@ -69,7 +69,9 @@ const (
 	// LabelNodeRoleExcludeBalancer specifies that the node should be
 	// exclude from load balancers created by a cloud provider.
 	LabelNodeRoleExcludeBalancer = "alpha.service-controller.kubernetes.io/exclude-balancer"
- 	
+
+	ServiceAnnotationLoadBalancerId = "service.beta.kubernetes.io/tencent-loadbalancer-id"
+
 	NotTencentLoadBalancerError = "Not Tencent LB"
 )
 
@@ -269,7 +271,7 @@ func (s *ServiceController) processServiceUpdate(cachedService *cachedService, s
 		}
 
 		if err.Error() == NotTencentLoadBalancerError {
-			message = "Not tencent load balancer: " 
+			message = "Not tencent load balancer: "
 		}
 
 		message += err.Error()
@@ -302,6 +304,9 @@ func (s *ServiceController) createLoadBalancerIfNeeded(key string, service *v1.S
 	var err error
 
 	if !wantsLoadBalancer(service) {
+		if service.Annotations[ServiceAnnotationLoadBalancerId] != "" {
+			return s.balancer.EnsureLBListenersDeleted(context.TODO(), s.clusterName, service)
+		}
 		_, exists, err := s.balancer.GetLoadBalancer(context.TODO(), s.clusterName, service)
 		if err != nil {
 			return fmt.Errorf("error getting LB for service %s: %v", key, err)

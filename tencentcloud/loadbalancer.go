@@ -124,25 +124,9 @@ func (cloud *Cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, 
 	return cloud.ensureLoadBalancerBackends(ctx, clusterName, service, nodes)
 }
 
-func (cloud *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName string, service *v1.Service) error {
-	var err error
-	var loadBalancer *clb.LoadBalancer
-	var listenerId string
-
+func (cloud *Cloud) EnsureLBListenersDeleted(ctx context.Context, clusterName string, service *v1.Service) error {
 	loadBalancerId := service.Annotations[ServiceAnnotationLoadBalancerId]
-	if loadBalancerId != "" {
-		loadBalancer, err = cloud.getLoadBalancerById(loadBalancerId)
-	} else {
-		loadBalancer, err = cloud.getLoadBalancerByName(cloudprovider.GetLoadBalancerName(service))
-		loadBalancerId = loadBalancer.LoadBalancerId
-	}
-
-	if err != nil || loadBalancer == nil {
-		if err == ErrCloudLoadBalancerNotFound {
-			return nil
-		}
-	}
-
+	loadBalancer, err := cloud.getLoadBalancerById(loadBalancerId)
 	response, err := cloud.clb.DescribeForwardLBListeners(&clb.DescribeForwardLBListenersArgs{
 		LoadBalancerId: loadBalancer.LoadBalancerId,
 	})
@@ -166,6 +150,17 @@ func (cloud *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName s
 			ListenerId:     listenerId,
 		})
 		return err
+	}
+
+	return cloud.deleteLoadBalancer(ctx, clusterName, service)
+}
+
+func (cloud *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName string, service *v1.Service) error {
+	_, err := cloud.getLoadBalancerByName(cloudprovider.GetLoadBalancerName(service))
+	if err != nil {
+		if err == ErrCloudLoadBalancerNotFound {
+			return nil
+		}
 	}
 
 	return cloud.deleteLoadBalancer(ctx, clusterName, service)
