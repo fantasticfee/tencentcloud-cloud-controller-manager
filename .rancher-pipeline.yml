@@ -1,10 +1,22 @@
 stages:
-- name: run-app
+- name: build
+  steps:
+  - runScriptConfig:
+      image: golang:latest
+      shellScript: GOOS=linux GOARCH=amd64 go build
+- name: build-image
+  steps:
+  - publishImageConfig:
+      dockerfilePath: ./Dockerfile
+      buildContext: .
+      tag: registry.cn-hangzhou.aliyuncs.com/fantasticfee/tencentcloud:latest
+      registry: registry.cn-hangzhou.aliyuncs.com
+- name: run
   steps:
   - applyAppConfig:
       catalogTemplate: cattle-global-data:example-mychart
       version: 0.1.0
-      name: mychart
+      name: myapp
       targetNamespace: default
 timeout: 60
 notification: {}
