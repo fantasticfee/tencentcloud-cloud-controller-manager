@@ -1,4 +1,4 @@
-﻿stages:
+stages:
 - name: run-app
   steps:
   - applyAppConfig:
