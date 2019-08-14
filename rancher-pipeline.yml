@@ -1,0 +1,10 @@
+﻿stages:
+- name: run-app
+  steps:
+  - applyAppConfig:
+      catalogTemplate: cattle-global-data:example-mychart
+      version: 0.1.0
+      name: mychart
+      targetNamespace: default
+timeout: 60
+notification: {}
