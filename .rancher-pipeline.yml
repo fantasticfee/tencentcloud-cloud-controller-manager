@@ -1,16 +1,4 @@
 stages:
-- name: build
-  steps:
-  - runScriptConfig:
-      image: golang:latest
-      shellScript: GOOS=linux GOARCH=amd64 go build
-- name: build-image
-  steps:
-  - publishImageConfig:
-      dockerfilePath: ./Dockerfile
-      buildContext: .
-      tag: registry.cn-hangzhou.aliyuncs.com/fantasticfee/tencentcloud:latest
-      registry: registry.cn-hangzhou.aliyuncs.com
 - name: run
   steps:
   - applyAppConfig:
